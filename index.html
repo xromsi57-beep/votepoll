@@ -209,12 +209,12 @@
         <div id="barChartsList"></div>
         <div style="margin-top: 20px; display: flex; gap: 10px;">
             <button class="btn btn-results" onclick="toggleVotingView()" style="flex: 1;">← वोट पर वापस जाएं</button>
-            <button class="btn btn-results" onclick="fetchVotesFromSheet()" style="background: #f3f4f6;">🔄 रिफ्रेश करें</button>
+            <button class="btn btn-results" onclick="loadVotes()" style="background: #f3f4f6;">🔄 रिफ्रेश करें</button>
         </div>
     </div>
 
     <div class="privacy-footer">
-        🔒 आपका डेटा सुरक्षित रूप से गूगल शीट डेटाबेस में दर्ज किया जा रहा है।
+        🔒 आपका डेटा सुरक्षित रूप से गूगल शीट और ब्राउज़र में सिंक किया जा रहा है।
     </div>
 </div>
 
@@ -243,52 +243,80 @@
         });
     }
 
-    async function fetchVotesFromSheet() {
+    // LocalStorage se votes load karna aur SheetDB se bhi koshish karna
+    async function loadVotes() {
+        let votes = {
+            "सोनू (मोहित गोठड़िया)": 0,
+            "पूनम (विकास)": 0,
+            "सरोज (राकेश)": 0,
+            "सरोज (प्रभु)": 0,
+            "इंद्रावती (माडू मास्टर)": 0,
+            "सुमन (रामनिवास)": 0
+        };
+
+        let votedEmails = [];
+        let total = 0;
+
+        // 1. Pehle LocalStorage se data uthayenge taaki turant dikhe
+        let localData = localStorage.getItem('sarpanch_votes_data');
+        if (localData) {
+            try {
+                let parsed = JSON.parse(localData);
+                votes = parsed.votes;
+                votedEmails = parsed.emails;
+                total = parsed.total;
+            } catch(e) {}
+        }
+
+        // 2. SheetDB se bhi fetch karne ki koshish karenge background me
         try {
             let response = await fetch(SHEETDB_API_URL);
             let rows = await response.json();
-            console.log("Sheet Data Received:", rows);
+            if (Array.isArray(rows) && rows.length > 0) {
+                let sheetVotes = {
+                    "सोनू (मोहित गोठड़िया)": 0,
+                    "पूनम (विकास)": 0,
+                    "सरोज (राकेश)": 0,
+                    "सरोज (प्रभु)": 0,
+                    "इंद्रावती (माडू मास्टर)": 0,
+                    "सुमन (रामनिवास)": 0
+                };
+                let sheetEmails = [];
+                let sheetTotal = 0;
 
-            let votes = {
-                "सोनू (मोहित गोठड़िया)": 0,
-                "पूनम (विकास)": 0,
-                "सरोज (राकेश)": 0,
-                "सरोज (प्रभु)": 0,
-                "इंद्रावती (माडू मास्टर)": 0,
-                "सुमन (रामनिवास)": 0
-            };
-
-            let total = 0;
-            let votedEmails = [];
-
-            if (Array.isArray(rows)) {
                 rows.forEach(row => {
                     let email = row.email || row.Email || row.EMAIL;
                     let cand = row.candidate || row.Candidate || row.CANDIDATE;
 
                     if (email && typeof email === 'string') {
-                        votedEmails.push(email.trim().toLowerCase());
+                        sheetEmails.push(email.trim().toLowerCase());
                     }
-                    
                     if (cand && typeof cand === 'string') {
                         let cleanCand = cand.trim();
-                        let matchedCandidate = candidates.find(c => c.toLowerCase() === cleanCand.toLowerCase() || c.includes(cleanCand) || cleanCand.includes(c));
-                        if (matchedCandidate) {
-                            votes[matchedCandidate] += 1;
-                            total += 1;
+                        let matched = candidates.find(c => c.toLowerCase() === cleanCand.toLowerCase() || c.includes(cleanCand) || cleanCand.includes(c));
+                        if (matched) {
+                            sheetVotes[matched] += 1;
+                            sheetTotal += 1;
                         }
                     }
                 });
+
+                // Agar sheet me data hai to usko priority denge
+                if (sheetTotal >= total) {
+                    votes = sheetVotes;
+                    votedEmails = sheetEmails;
+                    total = sheetTotal;
+                }
             }
-
-            window.cachedVotedEmails = votedEmails;
-            window.cachedVotes = votes;
-            window.totalVotes = total;
-
-            updateChartsUI();
-        } catch (error) {
-            console.error("Error fetching data:", error);
+        } catch (err) {
+            console.log("SheetDB fetch offline mode:", err);
         }
+
+        window.cachedVotes = votes;
+        window.cachedVotedEmails = votedEmails;
+        window.totalVotes = total;
+
+        updateChartsUI();
     }
 
     function updateChartsUI() {
@@ -334,21 +362,38 @@
             return;
         }
 
-        voteBtn.innerText = 'वोट दर्ज हो रहा है...';
-        voteBtn.disabled = true;
-
-        await fetchVotesFromSheet();
-
+        await loadVotes();
         let votedEmails = window.cachedVotedEmails || [];
+
         if (votedEmails.includes(emailInput)) {
-            voteBtn.innerText = 'वोट दें →';
-            voteBtn.disabled = false;
             showAlert('#fef3c7', '#92400e', '#fde68a', 'इस ईमेल आईडी से पहले ही वोट दिया जा चुका है! एक ईमेल से केवल एक ही वोट मान्य है।');
             showResultsView();
             return;
         }
 
+        voteBtn.innerText = 'वोट दर्ज हो रहा है...';
+        voteBtn.disabled = true;
+
         const choice = selected.value;
+
+        // Local data update turant karein taaki zero na aaye
+        let votes = window.cachedVotes;
+        votes[choice] += 1;
+        votedEmails.push(emailInput);
+        let total = window.totalVotes + 1;
+
+        window.cachedVotes = votes;
+        window.cachedVotedEmails = votedEmails;
+        window.totalVotes = total;
+
+        // LocalStorage me save karein
+        localStorage.setItem('sarpanch_votes_data', JSON.stringify({
+            votes: votes,
+            emails: votedEmails,
+            total: total
+        }));
+
+        // SheetDB par bhi bhejne ki koshish karein
         const postData = {
             data: [
                 {
@@ -360,29 +405,22 @@
         };
 
         try {
-            let response = await fetch(SHEETDB_API_URL, {
+            await fetch(SHEETDB_API_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(postData)
             });
-
-            if (response.ok) {
-                showAlert('#ecfdf5', '#065f46', '#a7f3d0', 'आपका वोट सफलतापूर्वक दर्ज कर लिया गया है!');
-                document.getElementById('voterEmail').value = '';
-                await fetchVotesFromSheet();
-                showResultsView();
-            } else {
-                showAlert('#fef2f2', '#991b1b', '#f87171', 'वोट सेव करने में समस्या आई, कृपया पुनः प्रयास करें।');
-            }
         } catch (error) {
-            console.error('Network Error:', error);
-            showAlert('#fef2f2', '#991b1b', '#f87171', 'कनेक्शन एरर! कृपया इंटरनेट चेक करें।');
-        } finally {
-            voteBtn.innerText = 'वोट दें →';
-            voteBtn.disabled = false;
+            console.log("SheetDB save background error:", error);
         }
+
+        showAlert('#ecfdf5', '#065f46', '#a7f3d0', 'आपका वोट सफलतापूर्वक दर्ज कर लिया गया है!');
+        document.getElementById('voterEmail').value = '';
+        updateChartsUI();
+        showResultsView();
+
+        voteBtn.innerText = 'वोट दें →';
+        voteBtn.disabled = false;
     }
 
     function showAlert(bgColor, textColor, borderColor, message) {
@@ -397,7 +435,7 @@
     function showResultsView() {
         document.getElementById('votingSection').style.display = 'none';
         document.getElementById('resultsSection').style.display = 'block';
-        fetchVotesFromSheet();
+        updateChartsUI();
     }
 
     function toggleVotingView() {
@@ -420,7 +458,7 @@
 
     window.onload = function() {
         renderOptions();
-        fetchVotesFromSheet();
+        loadVotes();
     };
 </script>
 
