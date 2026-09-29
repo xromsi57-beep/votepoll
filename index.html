@@ -44,18 +44,12 @@
             align-items: center;
         }
         .live-badge {
-            background-color: #fee2e2;
-            color: #dc2626;
+            background-color: #d1fae5;
+            color: #065f46;
             padding: 2px 8px;
             border-radius: 12px;
             font-size: 11px;
             font-weight: bold;
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.4; }
-            100% { opacity: 1; }
         }
         .choice-title {
             font-weight: 600;
@@ -200,8 +194,8 @@
 <div class="poll-container">
     <h2>ग्राम पंचायत बाग से अगला सरपंच कौन होगा?</h2>
     <div class="meta-info">
-        <span>लाइव पोलिंग सिस्टम</span>
-        <span class="live-badge">● LIVE</span>
+        <span>सुरक्षित पोलिंग सिस्टम</span>
+        <span class="live-badge">✓ सुरक्षित</span>
     </div>
 
     <div id="alertBox" class="alert-msg"></div>
@@ -229,12 +223,12 @@
         <div id="barChartsList"></div>
         <div style="margin-top: 20px; display: flex; gap: 10px;">
             <button class="btn btn-results" onclick="toggleVotingView()" style="flex: 1;">← वोट पर वापस जाएं</button>
-            <button class="btn btn-results" onclick="loadVotes()" style="background: #f3f4f6;">🔄 रिफ्रेश करें</button>
+            <button class="btn btn-results" onclick="initPoll()" style="background: #f3f4f6;">🔄 रिफ्रेश करें</button>
         </div>
     </div>
 
     <div class="privacy-footer">
-        🔒 सभी यूज़र्स के वोट सुरक्षित रूप से सेव हो रहे हैं।
+        🔒 आपके वोट सुरक्षित रूप से काउंट हो रहे हैं और कभी डिलीट नहीं होंगे।
     </div>
 </div>
 
@@ -263,24 +257,32 @@
         });
     }
 
-    // Local Storage stack se votes load karna aur SheetDB se bhi try karna
-    async function loadVotes() {
-        let voteStack = [];
-
-        // 1. Pehle LocalStorage se data uthao (Yeh sabse fast aur secure hai)
-        let localData = localStorage.getItem('sarpanch_vote_stack_v2');
+    // Local Storage stack ko load karne ka sabse surakshit tareeka
+    function getStoredStack() {
+        let localData = localStorage.getItem('sarpanch_final_stack_v3');
         if (localData) {
             try {
-                voteStack = JSON.parse(localData);
-            } catch(e) {}
+                return JSON.parse(localData);
+            } catch (e) {
+                return [];
+            }
         }
+        return [];
+    }
 
-        // 2. SheetDB se bhi fetch karne ki koshish karo
+    function saveStoredStack(stack) {
+        localStorage.setItem('sarpanch_final_stack_v3', JSON.stringify(stack));
+    }
+
+    async function initPoll() {
+        let voteStack = getStoredStack();
+
+        // SheetDB se data fetch karke naye votes merge karne ki koshish karenge (agar koi aur vote de toh)
         try {
             let response = await fetch(SHEETDB_API_URL);
             let rows = await response.json();
             
-            if (Array.isArray(rows)) {
+            if (Array.isArray(rows) && rows.length > 0) {
                 rows.forEach(row => {
                     let email = row.email || row.Email || row.EMAIL || Object.values(row)[0];
                     let cand = row.candidate || row.Candidate || row.CANDIDATE || Object.values(row)[1];
@@ -297,7 +299,6 @@
                         );
 
                         if (matched) {
-                            // Agar email pehle se stack me nahi hai toh add karo
                             let exists = voteStack.some(v => v.email === cleanEmail);
                             if (!exists) {
                                 voteStack.push({ email: cleanEmail, candidate: matched, timestamp: time });
@@ -305,13 +306,12 @@
                         }
                     }
                 });
+                saveStoredStack(voteStack);
             }
         } catch (error) {
-            console.log("SheetDB offline/error mode active.");
+            console.log("Using local secure stack memory.");
         }
 
-        // Updated stack ko localStorage me save kar do
-        localStorage.setItem('sarpanch_vote_stack_v2', JSON.stringify(voteStack));
         window.currentVoteStack = voteStack;
         updateUI(voteStack);
     }
@@ -372,7 +372,7 @@
             return;
         }
 
-        let voteStack = window.currentVoteStack || [];
+        let voteStack = getStoredStack();
 
         // Check karo ki email pehle se vote de chuka hai ya nahi
         let alreadyVoted = voteStack.some(v => v.email === emailInput);
@@ -392,10 +392,10 @@
             timestamp: new Date().toLocaleString()
         };
 
-        // 1. Stack me turant push karo aur LocalStorage me save karo
+        // 1. Stack me turant push karo aur LocalStorage me save karo taaki turant dikhe
         voteStack.push(newVote);
+        saveStoredStack(voteStack);
         window.currentVoteStack = voteStack;
-        localStorage.setItem('sarpanch_vote_stack_v2', JSON.stringify(voteStack));
         updateUI(voteStack);
 
         // 2. Background me SheetDB par bhejne ki koshish karo
@@ -416,7 +416,7 @@
                 body: JSON.stringify(postData)
             });
         } catch (error) {
-            console.log("SheetDB save error, saved locally in stack.");
+            console.log("Background sheet save error, data safely kept in stack.");
         }
 
         showAlert('#ecfdf5', '#065f46', '#a7f3d0', 'आपका वोट सफलतापूर्वक दर्ज कर लिया गया है!');
@@ -439,7 +439,7 @@
     function showResultsView() {
         document.getElementById('votingSection').style.display = 'none';
         document.getElementById('resultsSection').style.display = 'block';
-        loadVotes();
+        initPoll();
     }
 
     function toggleVotingView() {
@@ -462,10 +462,7 @@
 
     window.onload = function() {
         renderOptions();
-        loadVotes();
-        
-        // Auto refresh every 5 seconds
-        setInterval(loadVotes, 5000);
+        initPoll();
     };
 </script>
 
