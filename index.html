@@ -183,7 +183,7 @@
 
 <div class="poll-container">
     <h2>ग्राम पंचायत बाग से अगला सरपंच कौन होगा?</h2>
-    <div class="meta-info">एक अतिथि द्वारा · अभी-अभी</div>
+    <div class="meta-info">लाइव डेटाबेस कनेक्टेड · गूगल शीट</div>
 
     <div id="alertBox" class="alert-msg"></div>
 
@@ -196,11 +196,11 @@
 
         <div class="choice-title">अपना एक विकल्प चुनें:</div>
         <div class="options-list" id="optionsList">
-            <!-- Options will be loaded dynamically via script -->
+            <!-- Options will be loaded dynamically -->
         </div>
 
         <div class="btn-group">
-            <button class="btn btn-vote" onclick="submitVote()">वोट दें →</button>
+            <button class="btn btn-vote" id="voteBtn" onclick="submitVote()">वोट दें →</button>
             <button class="btn btn-results" onclick="showResultsView()">परिणाम देखें</button>
             <button class="btn btn-share" onclick="sharePoll()">शेयर करें</button>
         </div>
@@ -211,13 +211,14 @@
         <div class="choice-title" id="resultsTitle">लाइव परिणाम (कुल वोट: <span id="totalVotesCount">0</span>)</div>
         <div id="barChartsList"></div>
         <div style="margin-top: 20px; display: flex; gap: 10px;">
-            <button class="btn btn-results" id="backToVoteBtn" onclick="toggleVotingView()" style="flex: 1;">← वोट पर वापस जाएं</button>
+            <button class="btn btn-results" onclick="toggleVotingView()" style="flex: 1;">← वोट पर वापस जाएं</button>
+            <button class="btn btn-results" onclick="fetchVotesFromSheet()" style="background: #f3f4f6;">🔄 रिफ्रेश करें</button>
         </div>
     </div>
 
     <!-- Privacy Assurance Line -->
     <div class="privacy-footer">
-        🔒 घबराएं नहीं, आपका डेटा पूरी तरह से प्राइवेट रखा जाएगा।
+        🔒 आपका डेटा सुरक्षित रूप से गूगल शीट डेटाबेस में दर्ज किया जा रहा है।
     </div>
 </div>
 
@@ -231,22 +232,8 @@
         "सुमन (रामनिवास)"
     ];
 
-    // Sabhi ke votes shuruat me 0 se set kiye gaye hain
-    if (!localStorage.getItem('poll_votes_zero')) {
-        const initialVotes = {
-            "सोनू (मोहित गोठड़िया)": 0,
-            "पूनम (विकास)": 0,
-            "सरोज (राकेश)": 0,
-            "सरोज (प्रभु)": 0,
-            "इंद्रावती (माडू मास्टर)": 0,
-            "सुमन (रामनिवास)": 0
-        };
-        localStorage.setItem('poll_votes_zero', JSON.stringify(initialVotes));
-    }
-
-    if (!localStorage.getItem('voted_emails_zero')) {
-        localStorage.setItem('voted_emails_zero', JSON.stringify([]));
-    }
+    // SheetDB API URL
+    const SHEETDB_API_URL = "https://sheetdb.io/api/v1/s1s6dqlqlszr6";
 
     function renderOptions() {
         const listDiv = document.getElementById('optionsList');
@@ -261,12 +248,52 @@
         });
     }
 
-    function updateCharts() {
-        const votes = JSON.parse(localStorage.getItem('poll_votes_zero'));
-        let total = 0;
-        for (let key in votes) {
-            total += votes[key];
+    // Google Sheet se live data fetch karna aur count calculate karna
+    async function fetchVotesFromSheet() {
+        try {
+            let response = await fetch(SHEETDB_API_URL);
+            let rows = await response.json();
+
+            let votes = {
+                "सोनू (मोहित गोठड़िया)": 0,
+                "पूनम (विकास)": 0,
+                "सरोज (राकेश)": 0,
+                "सरोज (प्रभु)": 0,
+                "इंद्रावती (माडू मास्टर)": 0,
+                "सुमन (रामनिवास)": 0
+            };
+
+            let total = 0;
+            let votedEmails = [];
+
+            if (Array.isArray(rows)) {
+                rows.forEach(row => {
+                    let cand = row.candidate || row.Candidate;
+                    let email = row.email || row.Email;
+
+                    if (email) votedEmails.push(email.trim().toLowerCase());
+                    if (votes.hasOwnProperty(cand)) {
+                        votes[cand] += 1;
+                        total += 1;
+                    }
+                });
+            }
+
+            // Global save for duplicate check
+            window.cachedVotedEmails = votedEmails;
+            window.cachedVotes = votes;
+            window.totalVotes = total;
+
+            updateChartsUI();
+        } catch (error) {
+            console.error("Error fetching data:", error);
         }
+    }
+
+    function updateChartsUI() {
+        const total = window.totalVotes || 0;
+        const votes = window.cachedVotes || {};
+
         document.getElementById('totalVotesCount').innerText = total;
 
         const chartsDiv = document.getElementById('barChartsList');
@@ -290,66 +317,90 @@
         });
     }
 
-    function submitVote() {
-        const emailInput = document.getElementById('voterEmail').value.trim();
+    async function submitVote() {
+        const emailInput = document.getElementById('voterEmail').value.trim().toLowerCase();
         const selected = document.querySelector('input[name="pollOption"]:checked');
         const alertBox = document.getElementById('alertBox');
+        const voteBtn = document.getElementById('voteBtn');
 
         // Email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailInput || !emailRegex.test(emailInput)) {
-            alertBox.style.display = 'block';
-            alertBox.style.backgroundColor = '#fef2f2';
-            alertBox.style.color = '#991b1b';
-            alertBox.style.borderColor = '#f87171';
-            alertBox.innerText = 'कृपया अपनी सही ईमेल आईडी दर्ज करें!';
+            showAlert('#fef2f2', '#991b1b', '#f87171', 'कृपया अपनी सही ईमेल आईडी दर्ज करें!');
             return;
         }
 
         if (!selected) {
-            alertBox.style.display = 'block';
-            alertBox.style.backgroundColor = '#fef2f2';
-            alertBox.style.color = '#991b1b';
-            alertBox.style.borderColor = '#f87171';
-            alertBox.innerText = 'कृपया वोट देने के लिए किसी एक उम्मीदवार को चुनें!';
+            showAlert('#fef2f2', '#991b1b', '#f87171', 'कृपया वोट देने के लिए किसी एक उम्मीदवार को चुनें!');
             return;
         }
 
-        // Check if email already voted
-        let votedEmails = JSON.parse(localStorage.getItem('voted_emails_zero'));
-        if (votedEmails.includes(emailInput.toLowerCase())) {
-            alertBox.style.display = 'block';
-            alertBox.style.backgroundColor = '#fef3c7';
-            alertBox.style.color = '#92400e';
-            alertBox.style.borderColor = '#fde68a';
-            alertBox.innerText = 'इस ईमेल आईडी से पहले ही वोट दिया जा चुका है! एक ईमेल से केवल एक ही वोट मान्य है।';
+        // Pehle sheet se latest list check kar lo taaki duplicate vote na ho
+        voteBtn.innerText = 'जाँच हो रही है...';
+        voteBtn.disabled = true;
+
+        await fetchVotesFromSheet();
+
+        let votedEmails = window.cachedVotedEmails || [];
+        if (votedEmails.includes(emailInput)) {
+            voteBtn.innerText = 'वोट दें →';
+            voteBtn.disabled = false;
+            showAlert('#fef3c7', '#92400e', '#fde68a', 'इस ईमेल आईडी से पहले ही वोट दिया जा चुका है! एक ईमेल से केवल एक ही वोट मान्य है।');
             showResultsView();
             return;
         }
 
-        // Save vote and increment by 1
+        // Data bhejne ki taiyari SheetDB ko
         const choice = selected.value;
-        const votes = JSON.parse(localStorage.getItem('poll_votes_zero'));
-        votes[choice] = (votes[choice] || 0) + 1;
-        localStorage.setItem('poll_votes_zero', JSON.stringify(votes));
+        const postData = {
+            data: [
+                {
+                    "email": emailInput,
+                    "candidate": choice,
+                    "timestamp": new Date().toLocaleString()
+                }
+            ]
+        };
 
-        // Add email to voted list
-        votedEmails.push(emailInput.toLowerCase());
-        localStorage.setItem('voted_emails_zero', JSON.stringify(votedEmails));
+        try {
+            let response = await fetch(SHEETDB_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(postData)
+            });
 
+            if (response.ok) {
+                showAlert('#ecfdf5', '#065f46', '#a7f3d0', 'आपका वोट सफलतापूर्वक दर्ज कर लिया गया है!');
+                document.getElementById('voterEmail').value = '';
+                await fetchVotesFromSheet();
+                showResultsView();
+            } else {
+                showAlert('#fef2f2', '#991b1b', '#f87171', 'वोट सेव करने में समस्या आई, कृपया पुनः प्रयास करें।');
+            }
+        } catch (error) {
+            console.error('Error posting vote:', error);
+            showAlert('#fef2f2', '#991b1b', '#f87171', 'कनेक्शन एरर! कृपया इंटरनेट चेक करें।');
+        } finally {
+            voteBtn.innerText = 'वोट दें →';
+            voteBtn.disabled = false;
+        }
+    }
+
+    function showAlert(bgColor, textColor, borderColor, message) {
+        const alertBox = document.getElementById('alertBox');
         alertBox.style.display = 'block';
-        alertBox.style.backgroundColor = '#ecfdf5';
-        alertBox.style.color = '#065f46';
-        alertBox.style.borderColor = '#a7f3d0';
-        alertBox.innerText = 'आपका वोट सफलतापूर्वक दर्ज कर लिया गया है!';
-
-        showResultsView();
+        alertBox.style.backgroundColor = bgColor;
+        alertBox.style.color = textColor;
+        alertBox.style.borderColor = borderColor;
+        alertBox.innerText = message;
     }
 
     function showResultsView() {
         document.getElementById('votingSection').style.display = 'none';
         document.getElementById('resultsSection').style.display = 'block';
-        updateCharts();
+        fetchVotesFromSheet();
     }
 
     function toggleVotingView() {
@@ -366,13 +417,13 @@
                 url: window.location.href,
             }).catch(() => {});
         } else {
-            prompt('ये रहा पोल का लिंक, इसे कॉपी करके व्हाट्सएप पर शेयर करें:', window.location.href);
+            prompt('ये रहा पोल का लिंक, इसे कॉपी करके शेयर करें:', window.location.href);
         }
     }
 
     window.onload = function() {
         renderOptions();
-        updateCharts();
+        fetchVotesFromSheet();
     };
 </script>
 
