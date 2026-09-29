@@ -129,7 +129,6 @@
             background-color: #f3f4f6;
         }
         
-        /* Results & Bar Chart Styling */
         .results-container {
             margin-top: 20px;
             display: none;
@@ -195,9 +194,7 @@
         </div>
 
         <div class="choice-title">अपना एक विकल्प चुनें:</div>
-        <div class="options-list" id="optionsList">
-            <!-- Options will be loaded dynamically -->
-        </div>
+        <div class="options-list" id="optionsList"></div>
 
         <div class="btn-group">
             <button class="btn btn-vote" id="voteBtn" onclick="submitVote()">वोट दें →</button>
@@ -216,7 +213,6 @@
         </div>
     </div>
 
-    <!-- Privacy Assurance Line -->
     <div class="privacy-footer">
         🔒 आपका डेटा सुरक्षित रूप से गूगल शीट डेटाबेस में दर्ज किया जा रहा है।
     </div>
@@ -232,7 +228,6 @@
         "सुमन (रामनिवास)"
     ];
 
-    // SheetDB API URL
     const SHEETDB_API_URL = "https://sheetdb.io/api/v1/s1s6dqlqlszr6";
 
     function renderOptions() {
@@ -248,11 +243,11 @@
         });
     }
 
-    // Google Sheet se live data fetch karna aur count calculate karna
     async function fetchVotesFromSheet() {
         try {
             let response = await fetch(SHEETDB_API_URL);
             let rows = await response.json();
+            console.log("Sheet se data mila:", rows);
 
             let votes = {
                 "सोनू (मोहित गोठड़िया)": 0,
@@ -268,25 +263,29 @@
 
             if (Array.isArray(rows)) {
                 rows.forEach(row => {
-                    let cand = row.candidate || row.Candidate;
-                    let email = row.email || row.Email;
+                    let cand = row.candidate || row.Candidate || row.CANDIDATE;
+                    let email = row.email || row.Email || row.EMAIL;
 
                     if (email) votedEmails.push(email.trim().toLowerCase());
-                    if (votes.hasOwnProperty(cand)) {
-                        votes[cand] += 1;
-                        total += 1;
+                    
+                    if (cand) {
+                        let cleanCand = cand.trim();
+                        let matchedCandidate = candidates.find(c => c.toLowerCase() === cleanCand.toLowerCase());
+                        if (matchedCandidate) {
+                            votes[matchedCandidate] += 1;
+                            total += 1;
+                        }
                     }
                 });
             }
 
-            // Global save for duplicate check
             window.cachedVotedEmails = votedEmails;
             window.cachedVotes = votes;
             window.totalVotes = total;
 
             updateChartsUI();
         } catch (error) {
-            console.error("Error fetching data:", error);
+            console.error("Data laane mein error:", error);
         }
     }
 
@@ -320,10 +319,8 @@
     async function submitVote() {
         const emailInput = document.getElementById('voterEmail').value.trim().toLowerCase();
         const selected = document.querySelector('input[name="pollOption"]:checked');
-        const alertBox = document.getElementById('alertBox');
         const voteBtn = document.getElementById('voteBtn');
 
-        // Email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailInput || !emailRegex.test(emailInput)) {
             showAlert('#fef2f2', '#991b1b', '#f87171', 'कृपया अपनी सही ईमेल आईडी दर्ज करें!');
@@ -335,8 +332,7 @@
             return;
         }
 
-        // Pehle sheet se latest list check kar lo taaki duplicate vote na ho
-        voteBtn.innerText = 'जाँच हो रही है...';
+        voteBtn.innerText = 'वोट दर्ज हो रहा है...';
         voteBtn.disabled = true;
 
         await fetchVotesFromSheet();
@@ -350,7 +346,6 @@
             return;
         }
 
-        // Data bhejne ki taiyari SheetDB ko
         const choice = selected.value;
         const postData = {
             data: [
@@ -377,10 +372,12 @@
                 await fetchVotesFromSheet();
                 showResultsView();
             } else {
-                showAlert('#fef2f2', '#991b1b', '#f87171', 'वोट सेव करने में समस्या आई, कृपया पुनः प्रयास करें।');
+                let errText = await response.text();
+                console.error("SheetDB Error Response:", errText);
+                showAlert('#fef2f2', '#991b1b', '#f87171', 'वोट सेव करने में समस्या आई! कृपया गूगल शीट के कॉलम नेम (email, candidate, timestamp) चेक करें।');
             }
         } catch (error) {
-            console.error('Error posting vote:', error);
+            console.error('Network Error:', error);
             showAlert('#fef2f2', '#991b1b', '#f87171', 'कनेक्शन एरर! कृपया इंटरनेट चेक करें।');
         } finally {
             voteBtn.innerText = 'वोट दें →';
