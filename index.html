@@ -231,20 +231,21 @@
         "सुमन (रामनिवास)"
     ];
 
-    if (!localStorage.getItem('poll_votes')) {
+    // Sabhi ke votes shuruat me 0 se set kiye gaye hain
+    if (!localStorage.getItem('poll_votes_zero')) {
         const initialVotes = {
-            "सोनू (मोहित गोठड़िया)": 14,
-            "पूनम (विकास)": 8,
-            "सरोज (राकेश)": 19,
-            "सरोज (प्रभु)": 5,
-            "इंद्रावती (माडू मास्टर)": 11,
-            "सुमन (रामनिवास)": 7
+            "सोनू (मोहित गोठड़िया)": 0,
+            "पूनम (विकास)": 0,
+            "सरोज (राकेश)": 0,
+            "सरोज (प्रभु)": 0,
+            "इंद्रावती (माडू मास्टर)": 0,
+            "सुमन (रामनिवास)": 0
         };
-        localStorage.setItem('poll_votes', JSON.stringify(initialVotes));
+        localStorage.setItem('poll_votes_zero', JSON.stringify(initialVotes));
     }
 
-    if (!localStorage.getItem('voted_emails')) {
-        localStorage.setItem('voted_emails', JSON.stringify([]));
+    if (!localStorage.getItem('voted_emails_zero')) {
+        localStorage.setItem('voted_emails_zero', JSON.stringify([]));
     }
 
     function renderOptions() {
@@ -261,7 +262,7 @@
     }
 
     function updateCharts() {
-        const votes = JSON.parse(localStorage.getItem('poll_votes'));
+        const votes = JSON.parse(localStorage.getItem('poll_votes_zero'));
         let total = 0;
         for (let key in votes) {
             total += votes[key];
@@ -315,7 +316,7 @@
         }
 
         // Check if email already voted
-        let votedEmails = JSON.parse(localStorage.getItem('voted_emails'));
+        let votedEmails = JSON.parse(localStorage.getItem('voted_emails_zero'));
         if (votedEmails.includes(emailInput.toLowerCase())) {
             alertBox.style.display = 'block';
             alertBox.style.backgroundColor = '#fef3c7';
@@ -326,15 +327,15 @@
             return;
         }
 
-        // Save vote
+        // Save vote and increment by 1
         const choice = selected.value;
-        const votes = JSON.parse(localStorage.getItem('poll_votes'));
+        const votes = JSON.parse(localStorage.getItem('poll_votes_zero'));
         votes[choice] = (votes[choice] || 0) + 1;
-        localStorage.setItem('poll_votes', JSON.stringify(votes));
+        localStorage.setItem('poll_votes_zero', JSON.stringify(votes));
 
         // Add email to voted list
         votedEmails.push(emailInput.toLowerCase());
-        localStorage.setItem('voted_emails', JSON.stringify(votedEmails));
+        localStorage.setItem('voted_emails_zero', JSON.stringify(votedEmails));
 
         alertBox.style.display = 'block';
         alertBox.style.backgroundColor = '#ecfdf5';
