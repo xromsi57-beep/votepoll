@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gram Panchayat Sarpanch Chunav Poll</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .poll-container {
+            background: #ffffff;
+            width: 100%;
+            max-width: 600px;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+        h2 {
+            color: #1a1a1a;
+            font-size: 22px;
+            margin-top: 0;
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+        .meta-info {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 12px;
+        }
+        .choice-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        .options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+        .option-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            border: 2px solid #e1e4e8;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .option-item:hover {
+            border-color: #4f46e5;
+            background-color: #fafafe;
+        }
+        .option-item input {
+            margin-right: 12px;
+            transform: scale(1.2);
+            accent-color: #4f46e5;
+        }
+        .option-label {
+            font-size: 16px;
+            color: #2d3748;
+            font-weight: 500;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-vote {
+            background-color: #4f46e5;
+            color: white;
+            flex: 1;
+        }
+        .btn-vote:hover {
+            background-color: #4338ca;
+        }
+        .btn-results, .btn-share {
+            background-color: #ffffff;
+            color: #4b5563;
+            border: 1px solid #d1d5db;
+        }
+        .btn-results:hover, .btn-share:hover {
+            background-color: #f3f4f6;
+        }
+        
+        /* Results & Bar Chart Styling */
+        .results-container {
+            margin-top: 20px;
+            display: none;
+        }
+        .result-bar-item {
+            margin-bottom: 12px;
+        }
+        .result-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 5px;
+        }
+        .bar-background {
+            background-color: #e5e7eb;
+            border-radius: 6px;
+            height: 12px;
+            width: 100%;
+            overflow: hidden;
+        }
+        .bar-fill {
+            background-color: #4f46e5;
+            height: 100%;
+            width: 0%;
+            transition: width 0.8s ease-in-out;
+            border-radius: 6px;
+        }
+        .alert-msg {
+            background-color: #ecfdf5;
+            color: #065f46;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 15px;
+            border: 1px solid #a7f3d0;
+            display: none;
+        }
+        .privacy-footer {
+            margin-top: 25px;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            border-top: 1px dashed #e5e7eb;
+            padding-top: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="poll-container">
+    <h2>Gram Panchayat Baag se agla sarpanch kaun hoga</h2>
+    <div class="meta-info">by a guest · Just now</div>
+
+    <div id="alertBox" class="alert-msg"></div>
+
+    <!-- Voting Form Section -->
+    <div id="votingSection">
+        <div class="choice-title">Make a choice:</div>
+        <div class="options-list" id="optionsList">
+            <!-- Options will be loaded dynamically via script -->
+        </div>
+
+        <div class="btn-group">
+            <button class="btn btn-vote" onclick="submitVote()">Vote →</button>
+            <button class="btn btn-results" onclick="toggleResultsView()">Show results</button>
+            <button class="btn btn-share" onclick="sharePoll()">Share</button>
+        </div>
+    </div>
+
+    <!-- Live Results Section (Shown by default or after voting) -->
+    <div id="resultsSection" class="results-container">
+        <div class="choice-title" id="resultsTitle">Live Results (Total Votes: <span id="totalVotesCount">0</span>)</div>
+        <div id="barChartsList"></div>
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+            <button class="btn btn-results" id="backToVoteBtn" onclick="toggleVotingView()" style="flex: 1;">← Back to Vote</button>
+        </div>
+    </div>
+
+    <!-- Privacy Assurance Line -->
+    <div class="privacy-footer">
+        🔒 Ghabraye nahi, aapka data poori tarah se private rakha jayega.
+    </div>
+</div>
+
+<script>
+    const candidates = [
+        "Sonu (Mohit Gothadiya)",
+        "Poonam (Vikash)",
+        "Saroj (Rakesh)",
+        "Saroj (Prabhu)",
+        "Indrawati (Madhu Master)",
+        "Suman (Ramniwas)"
+    ];
+
+    // Initialize local storage database simulation if not present
+    if (!localStorage.getItem('poll_votes')) {
+        const initialVotes = {
+            "Sonu (Mohit Gothadiya)": 14,
+            "Poonam (Vikash)": 8,
+            "Saroj (Rakesh)": 19,
+            "Saroj (Prabhu)": 5,
+            "Indrawati (Madhu Master)": 11,
+            "Suman (Ramniwas)": 7
+        };
+        localStorage.setItem('poll_votes', JSON.stringify(initialVotes));
+    }
+
+    function renderOptions() {
+        const listDiv = document.getElementById('optionsList');
+        listDiv.innerHTML = '';
+        candidates.forEach((cand, index) => {
+            listDiv.innerHTML += `
+                <label class="option-item">
+                    <input type="radio" name="pollOption" value="${cand}">
+                    <span class="option-label">${cand}</span>
+                </label>
+            `;
+        });
+    }
+
+    function updateCharts() {
+        const votes = JSON.parse(localStorage.getItem('poll_votes'));
+        let total = 0;
+        for (let key in votes) {
+            total += votes[key];
+        }
+        document.getElementById('totalVotesCount').innerText = total;
+
+        const chartsDiv = document.getElementById('barChartsList');
+        chartsDiv.innerHTML = '';
+
+        candidates.forEach(cand => {
+            const count = votes[cand] || 0;
+            const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+
+            chartsDiv.innerHTML += `
+                <div class="result-bar-item">
+                    <div class="result-info">
+                        <span>${cand}</span>
+                        <span>${count} votes (${percentage}%)</span>
+                    </div>
+                    <div class="bar-background">
+                        <div class="bar-fill" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function submitVote() {
+        const selected = document.querySelector('input[name="pollOption"]:checked');
+        const alertBox = document.getElementById('alertBox');
+
+        if (!selected) {
+            alertBox.style.display = 'block';
+            alertBox.style.backgroundColor = '#fef2f2';
+            alertBox.style.color = '#991b1b';
+            alertBox.style.borderColor = '#f87171';
+            alertBox.innerText = 'Kripya vote dene ke liye kisi ek ummidwar ko chun experimentos karein!';
+            return;
+        }
+
+        if (localStorage.getItem('has_voted_gram_poll')) {
+            alertBox.style.display = 'block';
+            alertBox.style.backgroundColor = '#fef3c7';
+            alertBox.style.color = '#92400e';
+            alertBox.style.borderColor = '#fde68a';
+            alertBox.innerText = 'Aap pehle hi apna vote de chuke hain! Yeh rahe live results:';
+            showResultsView();
+            return;
+        }
+
+        const choice = selected.value;
+        const votes = JSON.parse(localStorage.getItem('poll_votes'));
+        votes[choice] = (votes[choice] || 0) + 1;
+        localStorage.setItem('poll_votes', JSON.stringify(votes));
+        localStorage.setItem('has_voted_gram_poll', 'true');
+
+        alertBox.style.display = 'block';
+        alertBox.style.backgroundColor = '#ecfdf5';
+        alertBox.style.color = '#065f46';
+        alertBox.style.borderColor = '#a7f3d0';
+        alertBox.innerText = 'Aapka vote safalpurvak darj kar liya gaya hai!';
+
+        showResultsView();
+    }
+
+    function showResultsView() {
+        document.getElementById('votingSection').style.display = 'none';
+        document.getElementById('resultsSection').style.display = 'block';
+        updateCharts();
+    }
+
+    function toggleResultsView() {
+        showResultsView();
+    }
+
+    function toggleVotingView() {
+        if (localStorage.getItem('has_voted_gram_poll')) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.style.display = 'block';
+            alertBox.innerText = 'Aap apna vote de chuke hain, isliye dobara voting section nahi khul sakta.';
+            return;
+        }
+        document.getElementById('resultsSection').style.display = 'none';
+        document.getElementById('votingSection').style.display = 'block';
+        document.getElementById('alertBox').style.display = 'none';
+    }
+
+    function sharePoll() {
+        if (navigator.share) {
+            navigator.share({
+                title: 'Gram Panchayat Sarpanch Chunav Poll',
+                text: 'Dekhiye gaon ke agle sarpanch ke liye live polling aur apna vote dijiye:',
+                url: window.location.href,
+            }).catch(() => {});
+        } else {
+            prompt('Yeh raha poll ka link, ise copy karke WhatsApp par share karein:', window.location.href);
+        }
+    }
+
+    // Load initial view: Show charts directly or voting depending on user status, 
+    // but user requested new user to see votes bar chart first.
+    window.onload = function() {
+        renderOptions();
+        // Naye user ko pehle se diye hue votes bar chart ke roop mein dikhane ke liye:
+        showResultsView();
+        // Agar user vote dena chahe toh niche 'Back to Vote' button available hai agar pehle vote nahi diya ho.
+        if (localStorage.getItem('has_voted_gram_poll')) {
+            document.getElementById('backToVoteBtn').style.display = 'none';
+        }
+    };
+</script>
+
+</body>
+</html>
