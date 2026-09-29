@@ -39,6 +39,23 @@
             margin-bottom: 20px;
             border-bottom: 1px solid #eee;
             padding-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .live-badge {
+            background-color: #fee2e2;
+            color: #dc2626;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
         }
         .choice-title {
             font-weight: 600;
@@ -182,7 +199,10 @@
 
 <div class="poll-container">
     <h2>ग्राम पंचायत बाग से अगला सरपंच कौन होगा?</h2>
-    <div class="meta-info">लाइव डेटाबेस कनेक्टेड · गूगल शीट + लोकल स्टैक</div>
+    <div class="meta-info">
+        <span>लाइव डेटाबेस कनेक्टेड · स्टैक सिंक</span>
+        <span class="live-badge">● LIVE</span>
+    </div>
 
     <div id="alertBox" class="alert-msg"></div>
 
@@ -214,7 +234,7 @@
     </div>
 
     <div class="privacy-footer">
-        🔒 डेटा स्टैक मेमोरी और गूगल शीट में सुरक्षित रूप से सिंक किया जा रहा है।
+        🔒 सभी यूज़र्स के लिए वोट काउंट्स लाइव अपडेट हो रहे हैं।
     </div>
 </div>
 
@@ -230,7 +250,6 @@
 
     const SHEETDB_API_URL = "https://sheetdb.io/api/v1/s1s6dqlqlszr6";
 
-    // Global Stack / Array to hold all votes locally for instant updates
     let voteStack = [];
 
     function renderOptions() {
@@ -246,14 +265,14 @@
         });
     }
 
-    // Sheet aur Local Stack ko sync karne ka function
+    // Server/Sheet aur Stack ko sync karne ka function
     async function syncAndRefresh() {
         try {
             let response = await fetch(SHEETDB_API_URL);
             let rows = await response.json();
             
             if (Array.isArray(rows)) {
-                voteStack = []; // Stack reset karke sheet ka latest data daalenge
+                voteStack = [];
                 rows.forEach(row => {
                     let email = row.email || row.Email || row.EMAIL;
                     let cand = row.candidate || row.Candidate || row.CANDIDATE;
@@ -268,13 +287,13 @@
                 });
             }
         } catch (error) {
-            console.log("Using local stack memory due to network/sheet delay.");
+            console.log("Using local stack memory.");
         }
 
         updateUIFromStack();
     }
 
-    // Stack ke data se UI (Votes Count & Percentage) calculate aur update karna
+    // Stack ke data se UI ko update karna
     function updateUIFromStack() {
         let votes = {
             "सोनू (मोहित गोठड़िया)": 0,
@@ -287,7 +306,6 @@
 
         let votedEmails = [];
 
-        // Stack ko loop karke votes count karna
         voteStack.forEach(vote => {
             if (votes[vote.candidate] !== undefined) {
                 votes[vote.candidate] += 1;
@@ -298,6 +316,8 @@
         window.cachedVotes = votes;
         window.cachedVotedEmails = votedEmails;
         let total = voteStack.length;
+        
+        // Sabhi jagah total votes count update kar do
         document.getElementById('totalVotesCount').innerText = total;
 
         const chartsDiv = document.getElementById('barChartsList');
@@ -337,7 +357,6 @@
             return;
         }
 
-        // Check if email already exists in stack
         let votedEmails = window.cachedVotedEmails || [];
         if (votedEmails.includes(emailInput)) {
             showAlert('#fef3c7', '#92400e', '#fde68a', 'इस ईमेल आईडी से पहले ही वोट दिया जा चुका है! एक ईमेल से केवल एक ही वोट मान्य है।');
@@ -355,11 +374,11 @@
             timestamp: new Date().toLocaleString()
         };
 
-        // 1. Stack me turant push karo (Instant local update)
+        // 1. Turant stack me push karke UI update karo
         voteStack.push(newVote);
         updateUIFromStack();
 
-        // 2. SheetDB par background me bhejo
+        // 2. Background me SheetDB par bhejo
         const postData = {
             data: [
                 {
@@ -424,6 +443,9 @@
     window.onload = function() {
         renderOptions();
         syncAndRefresh();
+        
+        // Auto-refresh every 5 seconds taaki sabhi ko live updates dikhte rahein
+        setInterval(syncAndRefresh, 5000);
     };
 </script>
 
