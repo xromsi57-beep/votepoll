@@ -161,30 +161,30 @@
 
 <div class="poll-container">
     <h2>Gram Panchayat Baag se agla sarpanch kaun hoga</h2>
-    <div class="meta-info">by a guest · Just now</div>
+    <div class="meta-info">ek guest dwara · Abhi abhi</div>
 
     <div id="alertBox" class="alert-msg"></div>
 
     <!-- Voting Form Section -->
     <div id="votingSection">
-        <div class="choice-title">Make a choice:</div>
+        <div class="choice-title">Apna ek vikalp chunein:</div>
         <div class="options-list" id="optionsList">
             <!-- Options will be loaded dynamically via script -->
         </div>
 
         <div class="btn-group">
-            <button class="btn btn-vote" onclick="submitVote()">Vote →</button>
-            <button class="btn btn-results" onclick="toggleResultsView()">Show results</button>
-            <button class="btn btn-share" onclick="sharePoll()">Share</button>
+            <button class="btn btn-vote" onclick="submitVote()">Vote dein →</button>
+            <button class="btn btn-results" onclick="toggleResultsView()">Parinam dekhein</button>
+            <button class="btn btn-share" onclick="sharePoll()">Share karein</button>
         </div>
     </div>
 
     <!-- Live Results Section (Shown by default or after voting) -->
     <div id="resultsSection" class="results-container">
-        <div class="choice-title" id="resultsTitle">Live Results (Total Votes: <span id="totalVotesCount">0</span>)</div>
+        <div class="choice-title" id="resultsTitle">Live Parinam (Kul Votes: <span id="totalVotesCount">0</span>)</div>
         <div id="barChartsList"></div>
         <div style="margin-top: 20px; display: flex; gap: 10px;">
-            <button class="btn btn-results" id="backToVoteBtn" onclick="toggleVotingView()" style="flex: 1;">← Back to Vote</button>
+            <button class="btn btn-results" id="backToVoteBtn" onclick="toggleVotingView()" style="flex: 1;">← Vote par wapas jayein</button>
         </div>
     </div>
 
@@ -204,7 +204,6 @@
         "Suman (Ramniwas)"
     ];
 
-    // Initialize local storage database simulation if not present
     if (!localStorage.getItem('poll_votes')) {
         const initialVotes = {
             "Sonu (Mohit Gothadiya)": 14,
@@ -268,7 +267,7 @@
             alertBox.style.backgroundColor = '#fef2f2';
             alertBox.style.color = '#991b1b';
             alertBox.style.borderColor = '#f87171';
-            alertBox.innerText = 'Kripya vote dene ke liye kisi ek ummidwar ko chun experimentos karein!';
+            alertBox.innerText = 'Kripya vote dene ke liye kisi ek ummidwar ko chunein!';
             return;
         }
 
@@ -277,7 +276,7 @@
             alertBox.style.backgroundColor = '#fef3c7';
             alertBox.style.color = '#92400e';
             alertBox.style.borderColor = '#fde68a';
-            alertBox.innerText = 'Aap pehle hi apna vote de chuke hain! Yeh rahe live results:';
+            alertBox.innerText = 'Aap pehle hi apna vote de chuke hain! Yeh rahe live parinam:';
             showResultsView();
             return;
         }
@@ -331,13 +330,9 @@
         }
     }
 
-    // Load initial view: Show charts directly or voting depending on user status, 
-    // but user requested new user to see votes bar chart first.
     window.onload = function() {
         renderOptions();
-        // Naye user ko pehle se diye hue votes bar chart ke roop mein dikhane ke liye:
         showResultsView();
-        // Agar user vote dena chahe toh niche 'Back to Vote' button available hai agar pehle vote nahi diya ho.
         if (localStorage.getItem('has_voted_gram_poll')) {
             document.getElementById('backToVoteBtn').style.display = 'none';
         }
