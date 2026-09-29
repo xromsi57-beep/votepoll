@@ -182,7 +182,7 @@
 
 <div class="poll-container">
     <h2>ग्राम पंचायत बाग से अगला सरपंच कौन होगा?</h2>
-    <div class="meta-info">लाइव डेटाबेस कनेक्टेड · गूगल शीट</div>
+    <div class="meta-info">लाइव डेटाबेस कनेक्टेड · गूगल शीट + लोकल स्टैक</div>
 
     <div id="alertBox" class="alert-msg"></div>
 
@@ -209,12 +209,12 @@
         <div id="barChartsList"></div>
         <div style="margin-top: 20px; display: flex; gap: 10px;">
             <button class="btn btn-results" onclick="toggleVotingView()" style="flex: 1;">← वोट पर वापस जाएं</button>
-            <button class="btn btn-results" onclick="loadVotes()" style="background: #f3f4f6;">🔄 रिफ्रेश करें</button>
+            <button class="btn btn-results" onclick="syncAndRefresh()" style="background: #f3f4f6;">🔄 रिफ्रेश करें</button>
         </div>
     </div>
 
     <div class="privacy-footer">
-        🔒 आपका डेटा सुरक्षित रूप से गूगल शीट और ब्राउज़र में सिंक किया जा रहा है।
+        🔒 डेटा स्टैक मेमोरी और गूगल शीट में सुरक्षित रूप से सिंक किया जा रहा है।
     </div>
 </div>
 
@@ -230,6 +230,9 @@
 
     const SHEETDB_API_URL = "https://sheetdb.io/api/v1/s1s6dqlqlszr6";
 
+    // Global Stack / Array to hold all votes locally for instant updates
+    let voteStack = [];
+
     function renderOptions() {
         const listDiv = document.getElementById('optionsList');
         listDiv.innerHTML = '';
@@ -243,8 +246,36 @@
         });
     }
 
-    // LocalStorage se votes load karna aur SheetDB se bhi koshish karna
-    async function loadVotes() {
+    // Sheet aur Local Stack ko sync karne ka function
+    async function syncAndRefresh() {
+        try {
+            let response = await fetch(SHEETDB_API_URL);
+            let rows = await response.json();
+            
+            if (Array.isArray(rows)) {
+                voteStack = []; // Stack reset karke sheet ka latest data daalenge
+                rows.forEach(row => {
+                    let email = row.email || row.Email || row.EMAIL;
+                    let cand = row.candidate || row.Candidate || row.CANDIDATE;
+                    let time = row.timestamp || row.Timestamp || "";
+
+                    if (email && cand) {
+                        let matched = candidates.find(c => c.toLowerCase() === cand.trim().toLowerCase() || c.includes(cand.trim()) || cand.trim().includes(c));
+                        if (matched) {
+                            voteStack.push({ email: email.trim().toLowerCase(), candidate: matched, timestamp: time });
+                        }
+                    }
+                });
+            }
+        } catch (error) {
+            console.log("Using local stack memory due to network/sheet delay.");
+        }
+
+        updateUIFromStack();
+    }
+
+    // Stack ke data se UI (Votes Count & Percentage) calculate aur update karna
+    function updateUIFromStack() {
         let votes = {
             "सोनू (मोहित गोठड़िया)": 0,
             "पूनम (विकास)": 0,
@@ -255,74 +286,18 @@
         };
 
         let votedEmails = [];
-        let total = 0;
 
-        // 1. Pehle LocalStorage se data uthayenge taaki turant dikhe
-        let localData = localStorage.getItem('sarpanch_votes_data');
-        if (localData) {
-            try {
-                let parsed = JSON.parse(localData);
-                votes = parsed.votes;
-                votedEmails = parsed.emails;
-                total = parsed.total;
-            } catch(e) {}
-        }
-
-        // 2. SheetDB se bhi fetch karne ki koshish karenge background me
-        try {
-            let response = await fetch(SHEETDB_API_URL);
-            let rows = await response.json();
-            if (Array.isArray(rows) && rows.length > 0) {
-                let sheetVotes = {
-                    "सोनू (मोहित गोठड़िया)": 0,
-                    "पूनम (विकास)": 0,
-                    "सरोज (राकेश)": 0,
-                    "सरोज (प्रभु)": 0,
-                    "इंद्रावती (माडू मास्टर)": 0,
-                    "सुमन (रामनिवास)": 0
-                };
-                let sheetEmails = [];
-                let sheetTotal = 0;
-
-                rows.forEach(row => {
-                    let email = row.email || row.Email || row.EMAIL;
-                    let cand = row.candidate || row.Candidate || row.CANDIDATE;
-
-                    if (email && typeof email === 'string') {
-                        sheetEmails.push(email.trim().toLowerCase());
-                    }
-                    if (cand && typeof cand === 'string') {
-                        let cleanCand = cand.trim();
-                        let matched = candidates.find(c => c.toLowerCase() === cleanCand.toLowerCase() || c.includes(cleanCand) || cleanCand.includes(c));
-                        if (matched) {
-                            sheetVotes[matched] += 1;
-                            sheetTotal += 1;
-                        }
-                    }
-                });
-
-                // Agar sheet me data hai to usko priority denge
-                if (sheetTotal >= total) {
-                    votes = sheetVotes;
-                    votedEmails = sheetEmails;
-                    total = sheetTotal;
-                }
+        // Stack ko loop karke votes count karna
+        voteStack.forEach(vote => {
+            if (votes[vote.candidate] !== undefined) {
+                votes[vote.candidate] += 1;
+                votedEmails.push(vote.email);
             }
-        } catch (err) {
-            console.log("SheetDB fetch offline mode:", err);
-        }
+        });
 
         window.cachedVotes = votes;
         window.cachedVotedEmails = votedEmails;
-        window.totalVotes = total;
-
-        updateChartsUI();
-    }
-
-    function updateChartsUI() {
-        const total = window.totalVotes || 0;
-        const votes = window.cachedVotes || {};
-
+        let total = voteStack.length;
         document.getElementById('totalVotesCount').innerText = total;
 
         const chartsDiv = document.getElementById('barChartsList');
@@ -362,9 +337,8 @@
             return;
         }
 
-        await loadVotes();
+        // Check if email already exists in stack
         let votedEmails = window.cachedVotedEmails || [];
-
         if (votedEmails.includes(emailInput)) {
             showAlert('#fef3c7', '#92400e', '#fde68a', 'इस ईमेल आईडी से पहले ही वोट दिया जा चुका है! एक ईमेल से केवल एक ही वोट मान्य है।');
             showResultsView();
@@ -375,31 +349,23 @@
         voteBtn.disabled = true;
 
         const choice = selected.value;
+        const newVote = {
+            email: emailInput,
+            candidate: choice,
+            timestamp: new Date().toLocaleString()
+        };
 
-        // Local data update turant karein taaki zero na aaye
-        let votes = window.cachedVotes;
-        votes[choice] += 1;
-        votedEmails.push(emailInput);
-        let total = window.totalVotes + 1;
+        // 1. Stack me turant push karo (Instant local update)
+        voteStack.push(newVote);
+        updateUIFromStack();
 
-        window.cachedVotes = votes;
-        window.cachedVotedEmails = votedEmails;
-        window.totalVotes = total;
-
-        // LocalStorage me save karein
-        localStorage.setItem('sarpanch_votes_data', JSON.stringify({
-            votes: votes,
-            emails: votedEmails,
-            total: total
-        }));
-
-        // SheetDB par bhi bhejne ki koshish karein
+        // 2. SheetDB par background me bhejo
         const postData = {
             data: [
                 {
-                    "email": emailInput,
-                    "candidate": choice,
-                    "timestamp": new Date().toLocaleString()
+                    "email": newVote.email,
+                    "candidate": newVote.candidate,
+                    "timestamp": newVote.timestamp
                 }
             ]
         };
@@ -411,12 +377,11 @@
                 body: JSON.stringify(postData)
             });
         } catch (error) {
-            console.log("SheetDB save background error:", error);
+            console.log("Background sheet sync error:", error);
         }
 
         showAlert('#ecfdf5', '#065f46', '#a7f3d0', 'आपका वोट सफलतापूर्वक दर्ज कर लिया गया है!');
         document.getElementById('voterEmail').value = '';
-        updateChartsUI();
         showResultsView();
 
         voteBtn.innerText = 'वोट दें →';
@@ -435,7 +400,7 @@
     function showResultsView() {
         document.getElementById('votingSection').style.display = 'none';
         document.getElementById('resultsSection').style.display = 'block';
-        updateChartsUI();
+        updateUIFromStack();
     }
 
     function toggleVotingView() {
@@ -458,7 +423,7 @@
 
     window.onload = function() {
         renderOptions();
-        loadVotes();
+        syncAndRefresh();
     };
 </script>
 
