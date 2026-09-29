@@ -200,7 +200,7 @@
 <div class="poll-container">
     <h2>ग्राम पंचायत बाग से अगला सरपंच कौन होगा?</h2>
     <div class="meta-info">
-        <span>लाइव डेटाबेस कनेक्टेड · स्टैक सिंक</span>
+        <span>लाइव पोलिंग सिस्टम</span>
         <span class="live-badge">● LIVE</span>
     </div>
 
@@ -229,12 +229,12 @@
         <div id="barChartsList"></div>
         <div style="margin-top: 20px; display: flex; gap: 10px;">
             <button class="btn btn-results" onclick="toggleVotingView()" style="flex: 1;">← वोट पर वापस जाएं</button>
-            <button class="btn btn-results" onclick="syncAndRefresh()" style="background: #f3f4f6;">🔄 रिफ्रेश करें</button>
+            <button class="btn btn-results" onclick="loadVotes()" style="background: #f3f4f6;">🔄 रिफ्रेश करें</button>
         </div>
     </div>
 
     <div class="privacy-footer">
-        🔒 सभी यूज़र्स के लिए वोट काउंट्स लाइव अपडेट हो रहे हैं।
+        🔒 सभी यूज़र्स के वोट सुरक्षित रूप से सेव हो रहे हैं।
     </div>
 </div>
 
@@ -250,8 +250,6 @@
 
     const SHEETDB_API_URL = "https://sheetdb.io/api/v1/s1s6dqlqlszr6";
 
-    let voteStack = [];
-
     function renderOptions() {
         const listDiv = document.getElementById('optionsList');
         listDiv.innerHTML = '';
@@ -265,36 +263,60 @@
         });
     }
 
-    // Server/Sheet aur Stack ko sync karne ka function
-    async function syncAndRefresh() {
+    // Local Storage stack se votes load karna aur SheetDB se bhi try karna
+    async function loadVotes() {
+        let voteStack = [];
+
+        // 1. Pehle LocalStorage se data uthao (Yeh sabse fast aur secure hai)
+        let localData = localStorage.getItem('sarpanch_vote_stack_v2');
+        if (localData) {
+            try {
+                voteStack = JSON.parse(localData);
+            } catch(e) {}
+        }
+
+        // 2. SheetDB se bhi fetch karne ki koshish karo
         try {
             let response = await fetch(SHEETDB_API_URL);
             let rows = await response.json();
             
             if (Array.isArray(rows)) {
-                voteStack = [];
                 rows.forEach(row => {
-                    let email = row.email || row.Email || row.EMAIL;
-                    let cand = row.candidate || row.Candidate || row.CANDIDATE;
+                    let email = row.email || row.Email || row.EMAIL || Object.values(row)[0];
+                    let cand = row.candidate || row.Candidate || row.CANDIDATE || Object.values(row)[1];
                     let time = row.timestamp || row.Timestamp || "";
 
-                    if (email && cand) {
-                        let matched = candidates.find(c => c.toLowerCase() === cand.trim().toLowerCase() || c.includes(cand.trim()) || cand.trim().includes(c));
+                    if (email && cand && typeof email === 'string' && typeof cand === 'string') {
+                        let cleanEmail = email.trim().toLowerCase();
+                        let cleanCand = cand.trim();
+                        
+                        let matched = candidates.find(c => 
+                            c.toLowerCase() === cleanCand.toLowerCase() || 
+                            c.includes(cleanCand) || 
+                            cleanCand.includes(c)
+                        );
+
                         if (matched) {
-                            voteStack.push({ email: email.trim().toLowerCase(), candidate: matched, timestamp: time });
+                            // Agar email pehle se stack me nahi hai toh add karo
+                            let exists = voteStack.some(v => v.email === cleanEmail);
+                            if (!exists) {
+                                voteStack.push({ email: cleanEmail, candidate: matched, timestamp: time });
+                            }
                         }
                     }
                 });
             }
         } catch (error) {
-            console.log("Using local stack memory.");
+            console.log("SheetDB offline/error mode active.");
         }
 
-        updateUIFromStack();
+        // Updated stack ko localStorage me save kar do
+        localStorage.setItem('sarpanch_vote_stack_v2', JSON.stringify(voteStack));
+        window.currentVoteStack = voteStack;
+        updateUI(voteStack);
     }
 
-    // Stack ke data se UI ko update karna
-    function updateUIFromStack() {
+    function updateUI(voteStack) {
         let votes = {
             "सोनू (मोहित गोठड़िया)": 0,
             "पूनम (विकास)": 0,
@@ -304,20 +326,13 @@
             "सुमन (रामनिवास)": 0
         };
 
-        let votedEmails = [];
-
         voteStack.forEach(vote => {
             if (votes[vote.candidate] !== undefined) {
                 votes[vote.candidate] += 1;
-                votedEmails.push(vote.email);
             }
         });
 
-        window.cachedVotes = votes;
-        window.cachedVotedEmails = votedEmails;
         let total = voteStack.length;
-        
-        // Sabhi jagah total votes count update kar do
         document.getElementById('totalVotesCount').innerText = total;
 
         const chartsDiv = document.getElementById('barChartsList');
@@ -357,8 +372,11 @@
             return;
         }
 
-        let votedEmails = window.cachedVotedEmails || [];
-        if (votedEmails.includes(emailInput)) {
+        let voteStack = window.currentVoteStack || [];
+
+        // Check karo ki email pehle se vote de chuka hai ya nahi
+        let alreadyVoted = voteStack.some(v => v.email === emailInput);
+        if (alreadyVoted) {
             showAlert('#fef3c7', '#92400e', '#fde68a', 'इस ईमेल आईडी से पहले ही वोट दिया जा चुका है! एक ईमेल से केवल एक ही वोट मान्य है।');
             showResultsView();
             return;
@@ -374,11 +392,13 @@
             timestamp: new Date().toLocaleString()
         };
 
-        // 1. Turant stack me push karke UI update karo
+        // 1. Stack me turant push karo aur LocalStorage me save karo
         voteStack.push(newVote);
-        updateUIFromStack();
+        window.currentVoteStack = voteStack;
+        localStorage.setItem('sarpanch_vote_stack_v2', JSON.stringify(voteStack));
+        updateUI(voteStack);
 
-        // 2. Background me SheetDB par bhejo
+        // 2. Background me SheetDB par bhejne ki koshish karo
         const postData = {
             data: [
                 {
@@ -396,7 +416,7 @@
                 body: JSON.stringify(postData)
             });
         } catch (error) {
-            console.log("Background sheet sync error:", error);
+            console.log("SheetDB save error, saved locally in stack.");
         }
 
         showAlert('#ecfdf5', '#065f46', '#a7f3d0', 'आपका वोट सफलतापूर्वक दर्ज कर लिया गया है!');
@@ -419,7 +439,7 @@
     function showResultsView() {
         document.getElementById('votingSection').style.display = 'none';
         document.getElementById('resultsSection').style.display = 'block';
-        updateUIFromStack();
+        loadVotes();
     }
 
     function toggleVotingView() {
@@ -442,10 +462,10 @@
 
     window.onload = function() {
         renderOptions();
-        syncAndRefresh();
+        loadVotes();
         
-        // Auto-refresh every 5 seconds taaki sabhi ko live updates dikhte rahein
-        setInterval(syncAndRefresh, 5000);
+        // Auto refresh every 5 seconds
+        setInterval(loadVotes, 5000);
     };
 </script>
 
