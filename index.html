@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gram Panchayat Sarpanch Chunav Poll</title>
+    <title>ग्राम पंचायत सरपंच चुनाव पोल</title>
     <style>
         * {
             box-sizing: border-box;
@@ -45,6 +45,28 @@
             color: #333;
             margin-bottom: 15px;
             font-size: 16px;
+        }
+        .email-box {
+            margin-bottom: 20px;
+        }
+        .email-box label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .email-box input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e1e4e8;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .email-box input:focus {
+            border-color: #4f46e5;
         }
         .options-list {
             display: flex;
@@ -160,66 +182,75 @@
 <body>
 
 <div class="poll-container">
-    <h2>Gram Panchayat Baag se agla sarpanch kaun hoga</h2>
-    <div class="meta-info">ek guest dwara · Abhi abhi</div>
+    <h2>ग्राम पंचायत बाग से अगला सरपंच कौन होगा?</h2>
+    <div class="meta-info">एक अतिथि द्वारा · अभी-अभी</div>
 
     <div id="alertBox" class="alert-msg"></div>
 
     <!-- Voting Form Section -->
     <div id="votingSection">
-        <div class="choice-title">Apna ek vikalp chunein:</div>
+        <div class="email-box">
+            <label for="voterEmail">अपनी ईमेल आईडी दर्ज करें (एक ईमेल से केवल 1 वोट मान्य):</label>
+            <input type="email" id="voterEmail" placeholder="example@gmail.com" required>
+        </div>
+
+        <div class="choice-title">अपना एक विकल्प चुनें:</div>
         <div class="options-list" id="optionsList">
             <!-- Options will be loaded dynamically via script -->
         </div>
 
         <div class="btn-group">
-            <button class="btn btn-vote" onclick="submitVote()">Vote dein →</button>
-            <button class="btn btn-results" onclick="toggleResultsView()">Parinam dekhein</button>
-            <button class="btn btn-share" onclick="sharePoll()">Share karein</button>
+            <button class="btn btn-vote" onclick="submitVote()">वोट दें →</button>
+            <button class="btn btn-results" onclick="showResultsView()">परिणाम देखें</button>
+            <button class="btn btn-share" onclick="sharePoll()">शेयर करें</button>
         </div>
     </div>
 
-    <!-- Live Results Section (Shown by default or after voting) -->
+    <!-- Live Results Section -->
     <div id="resultsSection" class="results-container">
-        <div class="choice-title" id="resultsTitle">Live Parinam (Kul Votes: <span id="totalVotesCount">0</span>)</div>
+        <div class="choice-title" id="resultsTitle">लाइव परिणाम (कुल वोट: <span id="totalVotesCount">0</span>)</div>
         <div id="barChartsList"></div>
         <div style="margin-top: 20px; display: flex; gap: 10px;">
-            <button class="btn btn-results" id="backToVoteBtn" onclick="toggleVotingView()" style="flex: 1;">← Vote par wapas jayein</button>
+            <button class="btn btn-results" id="backToVoteBtn" onclick="toggleVotingView()" style="flex: 1;">← वोट पर वापस जाएं</button>
         </div>
     </div>
 
     <!-- Privacy Assurance Line -->
     <div class="privacy-footer">
-        🔒 Ghabraye nahi, aapka data poori tarah se private rakha jayega.
+        🔒 घबराएं नहीं, आपका डेटा पूरी तरह से प्राइवेट रखा जाएगा।
     </div>
 </div>
 
 <script>
     const candidates = [
-        "Sonu (Mohit Gothadiya)",
-        "Poonam (Vikash)",
-        "Saroj (Rakesh)",
-        "Saroj (Prabhu)",
-        "Indrawati (Madhu Master)",
-        "Suman (Ramniwas)"
+        "सोनू (मोहित गोठड़िया)",
+        "पूनम (विकास)",
+        "सरोज (राकेश)",
+        "सरोज (प्रभु)",
+        "इंद्रावती (माडू मास्टर)",
+        "सुमन (रामनिवास)"
     ];
 
     if (!localStorage.getItem('poll_votes')) {
         const initialVotes = {
-            "Sonu (Mohit Gothadiya)": 14,
-            "Poonam (Vikash)": 8,
-            "Saroj (Rakesh)": 19,
-            "Saroj (Prabhu)": 5,
-            "Indrawati (Madhu Master)": 11,
-            "Suman (Ramniwas)": 7
+            "सोनू (मोहित गोठड़िया)": 14,
+            "पूनम (विकास)": 8,
+            "सरोज (राकेश)": 19,
+            "सरोज (प्रभु)": 5,
+            "इंद्रावती (माडू मास्टर)": 11,
+            "सुमन (रामनिवास)": 7
         };
         localStorage.setItem('poll_votes', JSON.stringify(initialVotes));
+    }
+
+    if (!localStorage.getItem('voted_emails')) {
+        localStorage.setItem('voted_emails', JSON.stringify([]));
     }
 
     function renderOptions() {
         const listDiv = document.getElementById('optionsList');
         listDiv.innerHTML = '';
-        candidates.forEach((cand, index) => {
+        candidates.forEach((cand) => {
             listDiv.innerHTML += `
                 <label class="option-item">
                     <input type="radio" name="pollOption" value="${cand}">
@@ -248,7 +279,7 @@
                 <div class="result-bar-item">
                     <div class="result-info">
                         <span>${cand}</span>
-                        <span>${count} votes (${percentage}%)</span>
+                        <span>${count} वोट (${percentage}%)</span>
                     </div>
                     <div class="bar-background">
                         <div class="bar-fill" style="width: ${percentage}%"></div>
@@ -259,39 +290,57 @@
     }
 
     function submitVote() {
+        const emailInput = document.getElementById('voterEmail').value.trim();
         const selected = document.querySelector('input[name="pollOption"]:checked');
         const alertBox = document.getElementById('alertBox');
+
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailInput || !emailRegex.test(emailInput)) {
+            alertBox.style.display = 'block';
+            alertBox.style.backgroundColor = '#fef2f2';
+            alertBox.style.color = '#991b1b';
+            alertBox.style.borderColor = '#f87171';
+            alertBox.innerText = 'कृपया अपनी सही ईमेल आईडी दर्ज करें!';
+            return;
+        }
 
         if (!selected) {
             alertBox.style.display = 'block';
             alertBox.style.backgroundColor = '#fef2f2';
             alertBox.style.color = '#991b1b';
             alertBox.style.borderColor = '#f87171';
-            alertBox.innerText = 'Kripya vote dene ke liye kisi ek ummidwar ko chunein!';
+            alertBox.innerText = 'कृपया वोट देने के लिए किसी एक उम्मीदवार को चुनें!';
             return;
         }
 
-        if (localStorage.getItem('has_voted_gram_poll')) {
+        // Check if email already voted
+        let votedEmails = JSON.parse(localStorage.getItem('voted_emails'));
+        if (votedEmails.includes(emailInput.toLowerCase())) {
             alertBox.style.display = 'block';
             alertBox.style.backgroundColor = '#fef3c7';
             alertBox.style.color = '#92400e';
             alertBox.style.borderColor = '#fde68a';
-            alertBox.innerText = 'Aap pehle hi apna vote de chuke hain! Yeh rahe live parinam:';
+            alertBox.innerText = 'इस ईमेल आईडी से पहले ही वोट दिया जा चुका है! एक ईमेल से केवल एक ही वोट मान्य है।';
             showResultsView();
             return;
         }
 
+        // Save vote
         const choice = selected.value;
         const votes = JSON.parse(localStorage.getItem('poll_votes'));
         votes[choice] = (votes[choice] || 0) + 1;
         localStorage.setItem('poll_votes', JSON.stringify(votes));
-        localStorage.setItem('has_voted_gram_poll', 'true');
+
+        // Add email to voted list
+        votedEmails.push(emailInput.toLowerCase());
+        localStorage.setItem('voted_emails', JSON.stringify(votedEmails));
 
         alertBox.style.display = 'block';
         alertBox.style.backgroundColor = '#ecfdf5';
         alertBox.style.color = '#065f46';
         alertBox.style.borderColor = '#a7f3d0';
-        alertBox.innerText = 'Aapka vote safalpurvak darj kar liya gaya hai!';
+        alertBox.innerText = 'आपका वोट सफलतापूर्वक दर्ज कर लिया गया है!';
 
         showResultsView();
     }
@@ -302,17 +351,7 @@
         updateCharts();
     }
 
-    function toggleResultsView() {
-        showResultsView();
-    }
-
     function toggleVotingView() {
-        if (localStorage.getItem('has_voted_gram_poll')) {
-            const alertBox = document.getElementById('alertBox');
-            alertBox.style.display = 'block';
-            alertBox.innerText = 'Aap apna vote de chuke hain, isliye dobara voting section nahi khul sakta.';
-            return;
-        }
         document.getElementById('resultsSection').style.display = 'none';
         document.getElementById('votingSection').style.display = 'block';
         document.getElementById('alertBox').style.display = 'none';
@@ -321,21 +360,18 @@
     function sharePoll() {
         if (navigator.share) {
             navigator.share({
-                title: 'Gram Panchayat Sarpanch Chunav Poll',
-                text: 'Dekhiye gaon ke agle sarpanch ke liye live polling aur apna vote dijiye:',
+                title: 'ग्राम पंचायत सरपंच चुनाव पोल',
+                text: 'देखिए गाँव के अगले सरपंच के लिए लाइव पोलिंग और अपना वोट दीजिए:',
                 url: window.location.href,
             }).catch(() => {});
         } else {
-            prompt('Yeh raha poll ka link, ise copy karke WhatsApp par share karein:', window.location.href);
+            prompt('ये रहा पोल का लिंक, इसे कॉपी करके व्हाट्सएप पर शेयर करें:', window.location.href);
         }
     }
 
     window.onload = function() {
         renderOptions();
-        showResultsView();
-        if (localStorage.getItem('has_voted_gram_poll')) {
-            document.getElementById('backToVoteBtn').style.display = 'none';
-        }
+        updateCharts();
     };
 </script>
 
