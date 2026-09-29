@@ -247,7 +247,7 @@
         try {
             let response = await fetch(SHEETDB_API_URL);
             let rows = await response.json();
-            console.log("Sheet se data mila:", rows);
+            console.log("Sheet Data Received:", rows);
 
             let votes = {
                 "सोनू (मोहित गोठड़िया)": 0,
@@ -263,14 +263,16 @@
 
             if (Array.isArray(rows)) {
                 rows.forEach(row => {
-                    let cand = row.candidate || row.Candidate || row.CANDIDATE;
                     let email = row.email || row.Email || row.EMAIL;
+                    let cand = row.candidate || row.Candidate || row.CANDIDATE;
 
-                    if (email) votedEmails.push(email.trim().toLowerCase());
+                    if (email && typeof email === 'string') {
+                        votedEmails.push(email.trim().toLowerCase());
+                    }
                     
-                    if (cand) {
+                    if (cand && typeof cand === 'string') {
                         let cleanCand = cand.trim();
-                        let matchedCandidate = candidates.find(c => c.toLowerCase() === cleanCand.toLowerCase());
+                        let matchedCandidate = candidates.find(c => c.toLowerCase() === cleanCand.toLowerCase() || c.includes(cleanCand) || cleanCand.includes(c));
                         if (matchedCandidate) {
                             votes[matchedCandidate] += 1;
                             total += 1;
@@ -285,7 +287,7 @@
 
             updateChartsUI();
         } catch (error) {
-            console.error("Data laane mein error:", error);
+            console.error("Error fetching data:", error);
         }
     }
 
@@ -372,9 +374,7 @@
                 await fetchVotesFromSheet();
                 showResultsView();
             } else {
-                let errText = await response.text();
-                console.error("SheetDB Error Response:", errText);
-                showAlert('#fef2f2', '#991b1b', '#f87171', 'वोट सेव करने में समस्या आई! कृपया गूगल शीट के कॉलम नेम (email, candidate, timestamp) चेक करें।');
+                showAlert('#fef2f2', '#991b1b', '#f87171', 'वोट सेव करने में समस्या आई, कृपया पुनः प्रयास करें।');
             }
         } catch (error) {
             console.error('Network Error:', error);
